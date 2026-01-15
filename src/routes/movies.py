@@ -143,7 +143,7 @@ async def create_movie(movie: MovieCreate, db: AsyncSession = Depends(get_db)):
     db.add(new_movie)
     await db.commit()
     await db.refresh(new_movie)
-    return MovieDetailSchema(new_movie)
+    return MovieDetailSchema.model_validate(new_movie)
 
 @router.get("/movies/{movie_id}/", response_model=MovieDetailSchema)
 async def get_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
@@ -161,7 +161,7 @@ async def get_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
     return MovieDetailSchema.model_validate(movie)
 
 @router.patch("/movies/{movie_id}/",
-              response_model=MovieDetailSchema,
+
               )
 async def update_movie(movie_id: int,
                        movie: MovieUpdate,
@@ -220,7 +220,6 @@ async def update_movie(movie_id: int,
     return {"detail": "Movie updated successfully."}
 
 @router.delete("/movies/{movie_id}/",
-               response_model=MovieDetailSchema,
                status_code=204)
 async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
