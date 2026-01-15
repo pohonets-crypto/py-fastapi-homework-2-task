@@ -1,10 +1,11 @@
 import datetime
 from math import ceil
-from typing import List
+from fastapi import Request
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -22,9 +23,10 @@ router = APIRouter()
     response_model=MovieListResponseSchema,
 )
 async def get_movies(
+    request: Request,
     db: AsyncSession = Depends(get_db,),
     page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=20)
+    per_page: int = Query(10, ge=1, le=20),
 ):
     offset = (page - 1) * per_page
     limit = per_page
@@ -35,14 +37,14 @@ async def get_movies(
     if total_items == 0:
         raise HTTPException(status_code=404, detail="No movies found.")
 
-    get_movie = select(MovieModel).order_by(
-        MovieModel.id).offset(offset).limit(limit)
+    get_movie = (select(MovieModel).order_by(desc(MovieModel.id))
+                 .offset(offset).limit(limit))
     result = await db.execute(get_movie)
     movies = result.scalars().all()
     total_pages = ceil(total_items / per_page)
     prev_page = None
     next_page = None
-    base_url = "/movies/"
+    base_url = request.url_for("get_movies")
     if page > 1:
         prev_page = f"{base_url}?page={page - 1}&per_page={per_page}"
 
@@ -62,7 +64,8 @@ async def get_movies(
 
 @router.post(
     "/movies/",
-    response_model=MovieListResponseSchema, )
+    response_model=MovieDetailSchema,
+    status_code=201,)
 async def create_movie(movie: MovieCreate, db: AsyncSession = Depends(get_db)):
 
 
@@ -70,7 +73,9 @@ async def create_movie(movie: MovieCreate, db: AsyncSession = Depends(get_db)):
         MovieModel.name == movie.name, MovieModel.date == movie.date))
     exists = result.scalar_one_or_none()
     if exists:
-        raise HTTPException(status_code=409, detail="Movie already exists.")
+        raise HTTPException(status_code=409,
+                            detail=f"A movie with the name '{exists.name}'"
+                                   f" and release date '{exists.date}' already exists.")
     stmt = select(CountryModel).where(CountryModel.code == movie.country)
     result = await db.execute(stmt)
     country = result.scalar_one_or_none()
@@ -113,7 +118,7 @@ async def create_movie(movie: MovieCreate, db: AsyncSession = Depends(get_db)):
     new_movie = MovieModel(
         name=movie.name,
         date=movie.date,
-        country=movie.country,
+        country=country,
         genres=genre_objs,
         actors=actors_objs,
         languages=language_objs,
@@ -161,7 +166,17 @@ async def get_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
 async def update_movie(movie_id: int,
                        movie: MovieUpdate,
                        db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
+    result = await db.execute(
+        select(MovieModel)
+        .options(
+            joinedload(MovieModel.country),
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.actors),
+            joinedload(MovieModel.languages),
+        )
+        .where(MovieModel.id == movie_id)
+    )
+
     movie_to_update = result.scalar_one_or_none()
     if not movie_to_update:
         raise HTTPException(status_code=404,
@@ -192,7 +207,7 @@ async def update_movie(movie_id: int,
         movie_to_update.status = movie.status
 
     if movie.budget:
-        if not movie.budget < 0:
+        if movie.budget < 0:
             raise HTTPException(status_code=400, detail="Invalid input data.")
         movie_to_update.budget = movie.budget
     if movie.revenue:
@@ -202,9 +217,11 @@ async def update_movie(movie_id: int,
 
     await db.commit()
     await db.refresh(movie_to_update)
-    return MovieDetailSchema.model_validate(movie_to_update)
+    return {"detail": "Movie updated successfully."}
 
-@router.delete("/movies/{movie_id}/", response_model=MovieDetailSchema)
+@router.delete("/movies/{movie_id}/",
+               response_model=MovieDetailSchema,
+               status_code=204)
 async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(MovieModel).where(MovieModel.id == movie_id)
@@ -215,4 +232,4 @@ async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
                             detail="Movie with the given ID was not found.")
     await db.delete(movie)
     await db.commit()
-    return movie
+    return None

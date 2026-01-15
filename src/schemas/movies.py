@@ -3,12 +3,37 @@ import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 
+
+class CountryResponse(BaseModel):
+    id: int
+    code: str
+    name: Optional[str]
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GenreResponse(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ActorResponse(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LanguageResponse(BaseModel):
+    id: int
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MovieDetailSchema(BaseModel):
     id: int
     name: str
     date: datetime.date
     score: float
-    genre: str
     overview: str
     crew: str
     orig_title: str
@@ -16,16 +41,12 @@ class MovieDetailSchema(BaseModel):
     orig_lang: str
     budget: float
     revenue: float
-    country: str
+    country: CountryResponse
+    genres: List[GenreResponse]
+    actors: List[ActorResponse]
+    languages: List[LanguageResponse]
+
     model_config = ConfigDict(from_attributes=True)
-
-
-class MovieListResponseSchema(BaseModel):
-    movies: List[MovieDetailSchema]
-    prev_page: Optional[str]
-    next_page: Optional[str]
-    total_pages: int
-    total_items: int
 
 
 class MovieListItemSchema(BaseModel):
@@ -34,6 +55,15 @@ class MovieListItemSchema(BaseModel):
     date: str
     score: float
     overview: str
+
+
+
+class MovieListResponseSchema(BaseModel):
+    movies: List[MovieListItemSchema]
+    prev_page: Optional[str]
+    next_page: Optional[str]
+    total_pages: int
+    total_items: int
 
 
 class MovieCreate(BaseModel):
@@ -58,24 +88,3 @@ class MovieUpdate(BaseModel):
     status: Optional[str]
     budget: Optional[float] = Field(None, ge=0)
     revenue: Optional[float] = Field(None, ge=0)
-
-
-class CountryResponse(BaseModel):
-    id: int
-    code: str
-    name: Optional[str]
-
-
-class GenreResponse(BaseModel):
-    id: int
-    name: str
-
-
-class ActorResponse(BaseModel):
-    id: int
-    name: str
-
-
-class LanguageResponse(BaseModel):
-    id: int
-    name: str
